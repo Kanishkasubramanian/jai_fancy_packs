@@ -5,6 +5,8 @@ import { AuthContext } from '../context/AuthContext';
 import { CartContext } from '../context/CartContext';
 import api from '../services/api';
 
+const phonePeScannerSrc = '/phonepe-scanner.png';
+
 const loadRazorpayScript = () => {
     return new Promise((resolve) => {
         const script = document.createElement('script');
@@ -16,7 +18,7 @@ const loadRazorpayScript = () => {
 };
 
 const Checkout = () => {
-    const { user } = useContext(AuthContext);
+    const { user, logout } = useContext(AuthContext);
     const { cartItems, clearCart } = useContext(CartContext);
     const navigate = useNavigate();
 
@@ -27,7 +29,7 @@ const Checkout = () => {
         country: user?.address?.country || 'India',
     });
 
-    const [paymentMethod, setPaymentMethod] = useState('Razorpay'); // or COD
+    const [paymentMethod, setPaymentMethod] = useState('Razorpay'); // Razorpay, Scanner or COD
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -65,6 +67,18 @@ const Checkout = () => {
                 return;
             }
 
+            if (paymentMethod === 'Scanner') {
+                await api.put(`/orders/${orderData._id}/pay`, {
+                    id: `SCANNER-${Date.now()}`,
+                    status: 'Pending Verification',
+                    update_time: new Date().toISOString(),
+                    email_address: user.email
+                });
+                clearCart();
+                navigate('/profile');
+                return;
+            }
+
             // Razorpay Flow
             const res = await loadRazorpayScript();
             if (!res) {
@@ -82,7 +96,7 @@ const Checkout = () => {
                 amount: razorpayOrder.amount,
                 currency: razorpayOrder.currency,
                 name: 'Jai Fancy Packs',
-                description: `Payment for Order ${orderData._id}`,
+                description: `UPI payment for Order ${orderData._id}`,
                 order_id: razorpayOrder.id,
                 handler: async function (response) {
                     try {
@@ -121,7 +135,15 @@ const Checkout = () => {
             paymentObject.open();
 
         } catch (err) {
-            setError(err.response?.data?.message || 'Error occurred while placing order');
+            const status = err.response?.status;
+            const msg = err.response?.data?.message || err.message || 'Error occurred while placing order';
+            if (status === 401) {
+                logout();
+                setError('Your session expired. Please login again to place the order.');
+                navigate('/login?redirect=checkout');
+                return;
+            }
+            setError(msg);
         } finally {
             setLoading(false);
         }
@@ -179,11 +201,15 @@ const Checkout = () => {
                             </h2>
                             <div className="space-y-3">
                                 <label className="flex items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                                    <input type="radio" name="payment" value="Razorpay" checked={paymentMethod === 'Razorpay'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-5 h-5 text-blue-600 focus:ring-blue-500" />
+                                    <input type="radio" name="payment" value="Razorpay" checked={paymentMethod === 'Razorpay'} onChange={(e) => { setPaymentMethod(e.target.value); setError(''); }} className="w-5 h-5 text-blue-600 focus:ring-blue-500" />
                                     <span className="ml-3 font-medium text-gray-900">Online Payment (Razorpay)</span>
                                 </label>
                                 <label className="flex items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                                    <input type="radio" name="payment" value="COD" checked={paymentMethod === 'COD'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-5 h-5 text-blue-600 focus:ring-blue-500" />
+                                    <input type="radio" name="payment" value="Scanner" checked={paymentMethod === 'Scanner'} onChange={(e) => { setPaymentMethod(e.target.value); setError(''); }} className="w-5 h-5 text-blue-600 focus:ring-blue-500" />
+                                    <span className="ml-3 font-medium text-gray-900">PhonePe Scanner (Manual Confirm)</span>
+                                </label>
+                                <label className="flex items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                                    <input type="radio" name="payment" value="COD" checked={paymentMethod === 'COD'} onChange={(e) => { setPaymentMethod(e.target.value); setError(''); }} className="w-5 h-5 text-blue-600 focus:ring-blue-500" />
                                     <span className="ml-3 font-medium text-gray-900">Cash on Delivery</span>
                                 </label>
                             </div>
@@ -233,8 +259,30 @@ const Checkout = () => {
                                 {loading && (
                                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
                                 )}
-                                {paymentMethod === 'Razorpay' ? 'Proceed to Pay' : 'Place Order'}
+                                {paymentMethod === 'Razorpay' ? 'Proceed to Pay' : paymentMethod === 'Scanner' ? 'I Have Paid - Place Order' : 'Place Order'}
                             </button>
+                            {paymentMethod === 'Razorpay' && (
+                                <p className="mt-3 text-xs text-gray-500">
+                                    After clicking Proceed to Pay, choose UPI in Razorpay and scan the QR using any UPI app (PhonePe, GPay, Paytm, etc.).
+                                </p>
+                            )}
+                            {paymentMethod === 'Scanner' && (
+                                <div className="mt-4 border border-gray-200 rounded-xl p-3 bg-gray-50">
+                                    <p className="text-sm font-semibold text-gray-900 mb-2">Scan to Pay (PhonePe)</p>
+                                    <img
+                                        src={phonePeScannerSrc}
+                                        alt="PhonePe scanner"
+                                        className="w-full rounded-lg border border-gray-200"
+                                        onError={(e) => {
+                                            e.currentTarget.style.display = 'none';
+                                            setError('Scanner image not found in public folder. Please check frontend/public/phonepe-scanner.png');
+                                        }}
+                                    />
+                                    <p className="mt-2 text-xs text-gray-600">
+                                        After payment, click "I Have Paid - Place Order".
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -5,10 +5,11 @@ import { User, Package, Clock, CheckCircle } from 'lucide-react';
 import api from '../services/api';
 
 const Profile = () => {
-    const { user } = useContext(AuthContext);
+    const { user, logout } = useContext(AuthContext);
     const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     useEffect(() => {
         if (!user) {
@@ -18,17 +19,24 @@ const Profile = () => {
 
         const fetchOrders = async () => {
             try {
+                setError('');
                 const { data } = await api.get('/orders/myorders');
                 setOrders(data.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
             } catch (error) {
-                console.error("Failed to fetch orders");
+                const status = error.response?.status;
+                if (status === 401) {
+                    logout();
+                    navigate('/login');
+                    return;
+                }
+                setError(error.response?.data?.message || 'Failed to fetch orders. Please try again.');
             } finally {
                 setLoading(false);
             }
         };
 
         fetchOrders();
-    }, [user, navigate]);
+    }, [user, navigate, logout]);
 
     if (!user) return null;
 
@@ -55,6 +63,10 @@ const Profile = () => {
                 {loading ? (
                     <div className="flex w-full justify-center py-10">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                ) : error ? (
+                    <div className="bg-white p-10 rounded-2xl shadow-sm text-center border border-gray-100">
+                        <p className="text-red-600 font-semibold">{error}</p>
                     </div>
                 ) : orders.length === 0 ? (
                     <div className="bg-white p-10 rounded-2xl shadow-sm text-center border border-gray-100">
@@ -93,7 +105,19 @@ const Profile = () => {
                                 <div className="p-4 sm:px-6 divide-y divide-gray-100">
                                     {order.orderItems.map((item, idx) => (
                                         <div key={idx} className="py-3 flex gap-4">
-                                            <img src={item.image} alt={item.name} className="w-16 h-16 rounded object-cover border" />
+                                            <img
+                                                src={
+                                                    typeof item.image === 'string'
+                                                        ? item.image
+                                                        : (item.image?.url || 'https://via.placeholder.com/200x200?text=No+Image')
+                                                }
+                                                alt={item.name}
+                                                referrerPolicy="no-referrer"
+                                                onError={(e) => {
+                                                    e.currentTarget.src = 'https://via.placeholder.com/200x200?text=No+Image';
+                                                }}
+                                                className="w-16 h-16 rounded object-cover border bg-gray-100"
+                                            />
                                             <div>
                                                 <p className="font-medium text-gray-900">{item.name}</p>
                                                 <p className="text-gray-500 text-sm">Qty: {item.qty} | ₹{item.price}</p>

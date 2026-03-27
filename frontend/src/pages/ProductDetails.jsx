@@ -4,6 +4,7 @@ import { Star, ShoppingCart, Heart, ShieldCheck, Truck, ArrowLeft, Plus, Minus }
 import api from '../services/api';
 import { CartContext } from '../context/CartContext';
 import { WishlistContext } from '../context/WishlistContext';
+import { AuthContext } from '../context/AuthContext';
 import ProductCard from '../components/ProductCard';
 
 const ProductDetails = () => {
@@ -13,10 +14,16 @@ const ProductDetails = () => {
     const [loading, setLoading] = useState(true);
     const [mainImage, setMainImage] = useState('');
     const [qty, setQty] = useState(1);
+    const [reviewRating, setReviewRating] = useState(5);
+    const [reviewComment, setReviewComment] = useState('');
+    const [reviewLoading, setReviewLoading] = useState(false);
+    const [reviewError, setReviewError] = useState('');
+    const [reviewSuccess, setReviewSuccess] = useState('');
     const navigate = useNavigate();
 
     const { addToCart } = useContext(CartContext);
     const { toggleWishlist, inWishlist } = useContext(WishlistContext);
+    const { user } = useContext(AuthContext);
 
     useEffect(() => {
         const fetchProduct = async () => {
@@ -42,6 +49,40 @@ const ProductDetails = () => {
         fetchProduct();
         window.scrollTo(0, 0);
     }, [id]);
+
+    const submitReview = async (e) => {
+        e.preventDefault();
+        setReviewError('');
+        setReviewSuccess('');
+
+        if (!user) {
+            navigate(`/login?redirect=product/${id}`);
+            return;
+        }
+
+        if (!reviewComment.trim()) {
+            setReviewError('Please enter a comment.');
+            return;
+        }
+
+        setReviewLoading(true);
+        try {
+            await api.post(`/products/${id}/reviews`, {
+                rating: Number(reviewRating),
+                comment: reviewComment.trim(),
+            });
+            setReviewSuccess('Thanks! Your review has been submitted.');
+            setReviewComment('');
+            setReviewRating(5);
+
+            const { data } = await api.get(`/products/${id}`);
+            setProduct(data);
+        } catch (err) {
+            setReviewError(err.response?.data?.message || err.message || 'Failed to submit review.');
+        } finally {
+            setReviewLoading(false);
+        }
+    };
 
     if (loading) return (
         <div className="flex justify-center items-center min-h-screen">
@@ -191,6 +232,93 @@ const ProductDetails = () => {
                                 <Truck className="w-8 h-8 text-blue-500 shrink-0" />
                                 <span>Fast Delivery in Coimbatore</span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Reviews */}
+                <div className="mt-16 pt-12 border-t border-gray-200">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                        <div>
+                            <h2 className="text-2xl font-extrabold text-gray-900 mb-6">Customer Reviews</h2>
+                            {product.reviews && product.reviews.length > 0 ? (
+                                <div className="space-y-5">
+                                    {product.reviews.map((rev, idx) => (
+                                        <div key={rev._id || idx} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="font-bold text-gray-900">{rev.name}</div>
+                                                <div className="flex items-center text-amber-400">
+                                                    {[1, 2, 3, 4, 5].map((s) => (
+                                                        <Star key={s} className={`w-4 h-4 ${Number(rev.rating) >= s ? 'fill-current' : 'text-gray-300'}`} />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            {rev.createdAt && (
+                                                <div className="mt-1 text-xs text-gray-500">
+                                                    {new Date(rev.createdAt).toLocaleDateString()}
+                                                </div>
+                                            )}
+                                            <p className="mt-3 text-gray-700 leading-relaxed">{rev.comment}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-gray-600 bg-gray-50 border border-gray-100 rounded-2xl p-6">
+                                    No reviews yet. Be the first to review this product.
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <h3 className="text-2xl font-extrabold text-gray-900 mb-6">Write a Review</h3>
+                            {!user && (
+                                <div className="mb-4 text-sm text-gray-700 bg-blue-50 border border-blue-100 rounded-2xl p-4">
+                                    Please <Link className="font-bold text-blue-700 hover:underline" to={`/login?redirect=product/${id}`}>login</Link> to write a review.
+                                </div>
+                            )}
+                            <form onSubmit={submitReview} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
+                                {reviewError && (
+                                    <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl p-3">
+                                        {reviewError}
+                                    </div>
+                                )}
+                                {reviewSuccess && (
+                                    <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl p-3">
+                                        {reviewSuccess}
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-900 mb-2">Rating</label>
+                                    <select
+                                        value={reviewRating}
+                                        onChange={(e) => setReviewRating(Number(e.target.value))}
+                                        disabled={!user || reviewLoading}
+                                        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        {[5, 4, 3, 2, 1].map((v) => (
+                                            <option key={v} value={v}>{v} - {v === 5 ? 'Excellent' : v === 4 ? 'Good' : v === 3 ? 'Average' : v === 2 ? 'Poor' : 'Terrible'}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-900 mb-2">Comment</label>
+                                    <textarea
+                                        value={reviewComment}
+                                        onChange={(e) => setReviewComment(e.target.value)}
+                                        disabled={!user || reviewLoading}
+                                        rows={4}
+                                        placeholder="Share your experience with this product..."
+                                        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    disabled={!user || reviewLoading}
+                                    className="w-full bg-blue-600 text-white rounded-full py-3 font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {reviewLoading ? 'Submitting...' : 'Submit Review'}
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>

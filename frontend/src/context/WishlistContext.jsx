@@ -12,22 +12,37 @@ export const WishlistProvider = ({ children }) => {
         }
     }, []);
 
-    const toggleWishlist = (product) => {
-        const existItem = wishlistItems.find((x) => x.product === product._id);
+    const getProductId = (item) => item?._id || item?.product;
+    const getImageUrl = (item) => {
+        if (!item) return 'https://via.placeholder.com/600x600?text=No+Image';
+        if (typeof item.image === 'string') return item.image;
+        if (typeof item.image?.url === 'string') return item.image.url;
+        const images = item.images;
+        if (Array.isArray(images) && images.length > 0) {
+            return images.find((img) => img.angle === 'front')?.url || images[0]?.url || 'https://via.placeholder.com/600x600?text=No+Image';
+        }
+        return 'https://via.placeholder.com/600x600?text=No+Image';
+    };
+
+    const toggleWishlist = (productOrItem) => {
+        const productId = getProductId(productOrItem);
+        if (!productId) return;
+
+        const existItem = wishlistItems.find((x) => x.product === productId);
         let updatedWishlist;
         
         if (existItem) {
             // Remove from wishlist
-            updatedWishlist = wishlistItems.filter((x) => x.product !== product._id);
+            updatedWishlist = wishlistItems.filter((x) => x.product !== productId);
         } else {
             // Add to wishlist
             updatedWishlist = [...wishlistItems, {
-                product: product._id,
-                name: product.name,
-                image: product.images[0],
-                price: product.price,
-                rating: product.rating,
-                numReviews: product.numReviews,
+                product: productId,
+                name: productOrItem.name,
+                image: getImageUrl(productOrItem),
+                price: productOrItem.price,
+                rating: productOrItem.rating,
+                numReviews: productOrItem.numReviews,
             }];
         }
         

@@ -32,8 +32,10 @@ const Wishlist = () => {
                                 <div className="relative aspect-square overflow-hidden bg-gray-100">
                                     <Link to={`/product/${item.product}`}>
                                         <img 
-                                            src={item.image} 
+                                            src={typeof item.image === 'string' ? item.image : (item.image?.url || 'https://via.placeholder.com/600x600?text=No+Image')} 
                                             alt={item.name}
+                                            referrerPolicy="no-referrer"
+                                            onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/600x600?text=No+Image'; }}
                                             className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                                         />
                                     </Link>
@@ -46,7 +48,7 @@ const Wishlist = () => {
                                     </button>
                                 </div>
 
-                                <div className="p-4 flex flex-col flex-grow">
+                                <div className="p-4 flex flex-col grow">
                                     <Link to={`/product/${item.product}`}>
                                         <h3 className="font-semibold text-gray-900 text-lg mb-1 line-clamp-2 hover:text-blue-600 transition-colors">
                                             {item.name}
